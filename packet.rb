@@ -1,5 +1,5 @@
 class Packet
-  attr_reader :answers
+  attr_reader :answers, :additionals, :authorities
 
   def initialize(header:, questions:, answers:, authorities:, additionals:)
     @header = header
@@ -7,13 +7,5 @@ class Packet
     @answers = answers
     @authorities = authorities
     @additionals = additionals
-  end
-
-  def ips
-    answers.map do |ans|
-      if ans.type_a?
-        ans.data.unpack("C*").join(".")
-      end
-    end.compact
   end
 end

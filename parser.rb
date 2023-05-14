@@ -2,6 +2,7 @@ require_relative 'header'
 require_relative 'question'
 require_relative 'record'
 require_relative 'packet'
+require 'stringio'
 
 class Parser
   CLASS_IN = 1
@@ -31,7 +32,7 @@ class Parser
   end
 
   def parse_question(io)
-    name = decode_name(io)
+    name = decode_name_simple(io)
     data = io.read(4)
     type, klass = data.unpack("S>*")
 
@@ -43,8 +44,14 @@ class Parser
     data = io.read(10)
 
     type, klass, ttl, data_len = data.unpack("S>S>L>S>")
-
-    data = io.read(data_len)
+    case type
+    when Record::TYPE_NS
+      data = decode_name(io)
+    when Record::TYPE_A
+      data = ip_to_string(io.read(data_len))
+    else
+      data = io.read(data_len)
+    end
 
     Record.new(name:, type:, klass:, ttl:, data:)
   end
@@ -58,6 +65,10 @@ class Parser
     additionals = header.num_additionals.times.map { parse_record(io) }
 
     Packet.new(header:, questions:, answers:, authorities:, additionals:)
+  end
+
+  def ip_to_string(data)
+    data.unpack("C*").join(".")
   end
 
   private
@@ -75,11 +86,21 @@ class Parser
     name += "\x00"
   end
 
+  def decode_name_simple(io)
+    parts = []
+
+    while (bytes = io.read(1).unpack("C")[0]) != 0
+      parts << io.read(bytes)
+    end
+
+    parts.join('.')
+  end
+
   def decode_name(io)
     parts = []
 
     while (bytes = io.read(1).unpack("C")[0]) != 0
-      if bytes & 0b1100_0000 != 0
+      if (bytes & 0b1100_0000) != 0
         parts << decode_compressed_name(bytes, io)  
         break
       else
